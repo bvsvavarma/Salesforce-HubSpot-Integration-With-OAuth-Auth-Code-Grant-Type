@@ -32,9 +32,21 @@ public with sharing class HubspotAuthController {
         HttpResponse response = http.send(request);
         if(response.getStatusCode() == 200){
             Map<String, Object> responseBody = (Map<String,Object>)JSON.deserializeUntyped(response.getBody());
-            String token = (String)responseBody.get('access_token');
-            String companyInfo = getCompaniesFromHubspot(token);
-            return companyInfo;
+            String accessToken = (String)responseBody.get('access_token');
+            String refreshToken = (String)responseBody.get('refresh_token');
+            Integer expireIn = (Integer)responseBody.get('expires_in');
+
+            Hubspot_Tokens__c tokens = new Hubspot_Tokens__c(
+                Access_Token__c = accessToken,
+                Refresh_Token__c = refreshToken,
+                Expires_In__c = expireIn,
+                setUpOwnerId = UserInfo.getUserId());
+            
+            insert tokens;
+
+            //String companyInfo = getCompaniesFromHubspot(token);
+            //return companyInfo;
+            return 'User is Successfully Authenticated';
         }
         return 'callout Failed';
     }
