@@ -22,7 +22,8 @@ public with sharing class HubspotAuthController {
         if(response.getStatusCode() == 200){
             Map<String, Object> responseBody = (Map<String,Object>)JSON.deserializeUntyped(response.getBody());
             String token = (String)responseBody.get('access_token');
-            String companyInfo = getAccountFromHubspot(token);
+            system.debug('Hubspot token: '+token);
+            String companyInfo = getCompaniesFromHubspot(token);
             return companyInfo;
         }
         return 'callout Failed';
@@ -40,5 +41,37 @@ public with sharing class HubspotAuthController {
         HttpResponse res = http.send(req);
         System.debug('Company Method Response: '+res);
         return res.getBody();
+    }
+
+    @AuraEnabled
+    public static String getCompaniesFromHubspot(String accessToken){
+        Http http = new Http();
+        HttpRequest req = new HttpRequest();
+        req.setMethod('POST');
+        req.setEndpoint('https://api.hubapi.com/crm/v3/objects/companies/batch/read?archived=false');
+        req.setHeader('Authorization', 'Bearer '+accessToken);
+        req.setHeader('content-type', 'application/json');
+        //req.setBody('{ "propertiesWithHistory": [ "name" ], "idProperty": "string", "inputs": [ { "id": "47453206222" } ], "properties": [ "name", "industry" ] }');
+        
+        BatchReadRequestBody requestBody = new BatchReadRequestBody();
+        requestBody.propertiesWithHistory = new List<String> {'name'};
+        requestBody.inputs = new List<Map<String, String>> {new Map<String, String>{'id' => '47453206222'}};
+        requestBody.properties = new List<String> {'name', 'industry'};
+        
+        req.setBody(JSON.serialize(requestBody));
+
+        HttpResponse res= http.send(req);
+        if(res.getStatusCode() == 200){
+            return res.getBody();
+        }else{
+            System.debug(res.getBody());
+            return 'Something went wrong. Callout Failed.';
+            
+        }
+    }
+    private class BatchReadRequestBody{
+        public List<String> propertiesWithHistory;
+        public List<Map<String, String>> inputs;
+        public List<String> properties;
     }
 }
