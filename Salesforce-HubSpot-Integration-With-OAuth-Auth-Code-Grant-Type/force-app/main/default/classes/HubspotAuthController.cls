@@ -1,7 +1,34 @@
 public with sharing class HubspotAuthController {
+    
+    @AuraEnabled
+    public static Boolean isAccessTokenValid(Hubspot_Tokens__c token){
+        //2. If record exists, fetch it
+        if(String.isNotBlank(token.Access_Token__c)){
+            //3. From the CS record extarct Last Modified Date and capture Current Time
+            DateTime lastModifiedDate = token.lastModifiedDate;
+            DateTime currentTimeStamp = DateTime.now();
+            
+             //4. Calculate the delat and if delta < expires_in use existing access token
+            Long deltaInMillis = currentTimeStamp.getTime() - lastModifiedDate.getTime();
+            Long deltaInSeconds = deltaInMillis/1000;
+            
+            return deltaInSeconds < token.Expires_In__c;
+        }
+        return false;
+    }
 
     @AuraEnabled
     public static string getAuthStatus(String code){
+        //1. Fetch the Custom Setting record for the current user
+        Hubspot_Tokens__c tokenInfo = Hubspot_Tokens__c.getInstance(UserInfo.getUserId());
+        
+        if(isAccessTokenValid(tokenInfo)){
+            String companyInfo = getCompaniesFromHubspot(tokenInfo.Access_Token__c);
+            return companyInfo;
+        }else{
+        }
+        
+
         String endPoint = 'https://api.hubapi.com/oauth/v1/token';
         //Step 1: Instantiate the Http class
         Http http = new Http();
@@ -21,11 +48,26 @@ public with sharing class HubspotAuthController {
         String clientSecret = credentials.Client_Secret__c;
         String redirectURI = credentials.Redirect_URI__c;
         
-        String requestBody = '&grant_type=authorization_code'+
+        String requestBody = '';
+            //5. renew the access_token using the refresh_token
+            //Access Toekn exists, but expired
+            if(String.isNotBlank(tokenInfo.Access_Token__c)){
+                requestBody = '&grant_type=refresh_code&refresh_token='+tokenInfo.Refresh_Token__c +
+                '&client_id='+clientId+
+                '&client_secret='+clientSecret;
+            }else{
+                // User is not authenticated with hubspot
+                requestBody = '&grant_type=authorization_code'+
+                '&code='+code+
+                '&redirect_uri='+EncodingUtil.urlEncode(redirectURI, 'UTF-8')+
+                '&client_id='+clientId+
+                '&client_secret='+clientSecret;
+            }
+        /*String requestBody = '&grant_type=authorization_code'+
         '&code='+code+
         '&redirect_uri='+EncodingUtil.urlEncode(redirectURI, 'UTF-8')+
         '&client_id='+clientId+
-        '&client_secret='+clientSecret;
+        '&client_secret='+clientSecret;*/
         request.setBody(requestBody);
 
         //Step 3: Send the request and handle the response
@@ -37,12 +79,13 @@ public with sharing class HubspotAuthController {
             Integer expireIn = (Integer)responseBody.get('expires_in');
 
             Hubspot_Tokens__c tokens = new Hubspot_Tokens__c(
+                Id = tokenInfo.Id,
                 Access_Token__c = accessToken,
                 Refresh_Token__c = refreshToken,
                 Expires_In__c = expireIn,
                 setUpOwnerId = UserInfo.getUserId());
             
-            insert tokens;
+            upsert tokens;
 
             //String companyInfo = getCompaniesFromHubspot(token);
             //return companyInfo;

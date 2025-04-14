@@ -1,4 +1,4 @@
-<apex:page>
+<apex:page >
     <script>
         window.onload = onLoad;
 
@@ -14,4 +14,3 @@
         }
     </script>
 </apex:page>
-
